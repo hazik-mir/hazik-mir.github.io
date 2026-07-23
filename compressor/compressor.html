@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hazik.in — Compress Your Images</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --bg:#060606;
+    --surface:#111111;
+    --surface-2:#1a1a1a;
+    --surface-3:#212121;
+    --border:#2a2a2a;
+    --border-strong:#484848;
+    --text:#f6f6f6;
+    --text-dim:#a4a4a4;
+    --text-faint:#666666;
+    --white:#ffffff;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Open Sans',system-ui,sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:#fff;color:#000;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:40;
+    background:rgba(6,6,6,.82);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--border);
+  }
+  .topbar-inner{
+    max-width:960px; margin:0 auto;
+    display:flex; align-items:center; gap:12px;
+    padding:14px 20px;
+  }
+  .brand{
+    display:flex; align-items:center; gap:10px;
+    text-decoration:none; color:var(--text);
+    padding:6px 8px 6px 6px; border-radius:10px;
+    transition:background .2s ease, transform .15s ease;
+  }
+  .brand:hover{background:var(--surface-2);}
+  .brand:active{transform:scale(.97);}
+  .home-icon{
+    width:34px; height:34px; border-radius:9px;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--surface-2); border:1px solid var(--border-strong);
+    flex-shrink:0;
+  }
+  .home-icon svg{width:17px;height:17px;stroke:var(--white);}
+  .brand-name{
+    font-family:'Open Sans',sans-serif;
+    font-weight:800;
+    font-size:19px;
+    letter-spacing:.2px;
+  }
+  .topbar-tag{
+    margin-left:auto;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--text-faint);
+    border:1px solid var(--border);
+    padding:5px 10px; border-radius:999px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .topbar-tag .dot{width:6px;height:6px;border-radius:50%;background:var(--white);animation:pulse 1.8s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.35;}50%{opacity:1;}}
+
+  /* animated compression stripe */
+  .shimmer{
+    position:relative; height:3px; width:100%;
+    background:
+      repeating-linear-gradient(115deg,
+        rgba(255,255,255,.09) 0 10px,
+        rgba(255,255,255,0) 10px 20px);
+    background-size:200% 100%;
+    animation:stripe-move 3.2s linear infinite;
+    overflow:hidden;
+  }
+  @keyframes stripe-move{
+    0%{background-position:0 0;}
+    100%{background-position:-160px 0;}
+  }
+  .shimmer-fill{
+    position:absolute; top:0; left:0; bottom:0;
+    width:0%; background:var(--white);
+    box-shadow:0 0 12px rgba(255,255,255,.6);
+    transition:width .25s ease;
+  }
+  @media (prefers-reduced-motion: reduce){
+    .shimmer{animation:none;}
+  }
+
+  /* ---------- Layout ---------- */
+  main{max-width:960px; margin:0 auto; padding:36px 20px 90px;}
+
+  /* ---------- Intro / empty state ---------- */
+  .intro-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:38px 30px;
+    text-align:center;
+    animation:rise .5s ease both;
+  }
+  @keyframes rise{from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);}}
+  .intro-title{
+    font-size:clamp(24px,4vw,32px);
+    font-weight:800; margin:0 0 10px;
+    letter-spacing:-.01em;
+  }
+  .intro-badges{
+    display:flex; justify-content:center; gap:8px; flex-wrap:wrap;
+    margin-bottom:22px;
+  }
+  .badge{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px; letter-spacing:.03em;
+    color:var(--text-dim);
+    border:1px solid var(--border-strong);
+    padding:6px 12px; border-radius:999px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .badge svg{width:12px;height:12px;stroke:var(--text-dim);}
+  .credit{
+    font-size:13px; color:var(--text-faint); margin-bottom:26px;
+  }
+
+  .dropzone{
+    border:1.5px dashed var(--border-strong);
+    border-radius:12px;
+    padding:44px 20px;
+    cursor:pointer;
+    transition:border-color .2s ease, background .2s ease, transform .15s ease;
+    display:flex; flex-direction:column; align-items:center; gap:12px;
+  }
+  .dropzone:hover{border-color:var(--white); background:var(--surface-2);}
+  .dropzone.dragover{border-color:var(--white); background:var(--surface-3); transform:scale(1.01);}
+  .dropzone-icon{
+    width:52px; height:52px; border-radius:50%;
+    background:var(--surface-2); border:1px solid var(--border-strong);
+    display:flex; align-items:center; justify-content:center;
+    animation:float 3s ease-in-out infinite;
+  }
+  @keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
+  .dropzone-icon svg{width:22px;height:22px;stroke:var(--white);}
+  .dropzone-text{font-weight:700; font-size:15.5px;}
+  .dropzone-sub{font-size:12.5px; color:var(--text-faint); font-family:'IBM Plex Mono',monospace;}
+
+  /* ---------- Cards (shared) ---------- */
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    animation:rise .4s ease both;
+  }
+  .section-heading{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom:16px; flex-wrap:wrap; gap:10px;
+  }
+  .section-heading h2{margin:0; font-size:19px; font-weight:800;}
+  .count-pill{
+    font-family:'IBM Plex Mono',monospace; font-size:12px;
+    background:var(--white); color:#000;
+    padding:4px 10px; border-radius:999px; font-weight:600;
+  }
+
+  /* ---------- Single image card ---------- */
+  .single-card{padding:26px;}
+  .single-top{display:flex; gap:16px; align-items:flex-start;}
+  .thumb{
+    width:78px; height:78px; border-radius:10px; object-fit:cover;
+    border:1px solid var(--border-strong); background:var(--surface-2); flex-shrink:0;
+  }
+  .meta-list{flex:1; min-width:0;}
+  .meta-row{
+    display:flex; justify-content:space-between; gap:10px;
+    padding:7px 0; border-bottom:1px dashed var(--border);
+    font-size:13.5px;
+  }
+  .meta-row:last-child{border-bottom:none;}
+  .meta-label{color:var(--text-faint);}
+  .meta-value{font-family:'IBM Plex Mono',monospace; font-weight:500; text-align:right; word-break:break-all;}
+
+  .divider{height:1px; background:var(--border); margin:20px 0;}
+
+  .field-label{
+    font-size:11.5px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--text-faint); margin-bottom:8px; display:block;
+  }
+
+  /* ---------- Drawer dropdown ---------- */
+  .drawer-wrap{position:relative;}
+  .drawer-btn{
+    width:100%; display:flex; align-items:center; justify-content:space-between;
+    background:var(--surface-2); border:1px solid var(--border-strong);
+    color:var(--text); padding:12px 14px; border-radius:10px;
+    font-family:'IBM Plex Mono',monospace; font-size:13.5px; cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .drawer-btn:hover{border-color:var(--white);}
+  .drawer-btn .chev{transition:transform .25s ease;}
+  .drawer-btn.open .chev{transform:rotate(180deg);}
+  .drawer-panel{
+    position:absolute; left:0; right:0; top:calc(100% + 8px);
+    background:var(--surface-3); border:1px solid var(--border-strong);
+    border-radius:10px; overflow:hidden; z-index:30;
+    transform-origin:top center;
+    animation:drawer-open .18s ease both;
+    box-shadow:0 12px 30px rgba(0,0,0,.5);
+  }
+  @keyframes drawer-open{
+    from{opacity:0; transform:scaleY(.85) translateY(-4px);}
+    to{opacity:1; transform:scaleY(1) translateY(0);}
+  }
+  .drawer-option{
+    padding:12px 14px; cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    border-bottom:1px solid var(--border);
+    transition:background .12s ease;
+  }
+  .drawer-option:last-child{border-bottom:none;}
+  .drawer-option:hover{background:var(--surface-2);}
+  .drawer-option.active{background:var(--white); color:#000;}
+  .drawer-option-label{font-size:13.5px; font-weight:600;}
+  .drawer-option-sub{font-size:11px; color:var(--text-faint); font-family:'IBM Plex Mono',monospace;}
+  .drawer-option.active .drawer-option-sub{color:#333;}
+  .drawer-option-val{font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:600;}
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    font-family:'Open Sans',sans-serif; font-weight:700; font-size:14.5px;
+    border-radius:10px; padding:13px 20px; border:1px solid transparent;
+    cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    transition:transform .12s ease, opacity .15s ease, background .15s ease;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn-primary{background:var(--white); color:#000; width:100%;}
+  .btn-primary:hover{opacity:.88;}
+  .btn-primary:disabled{opacity:.4; cursor:not-allowed;}
+  .btn-ghost{background:transparent; color:var(--text); border-color:var(--border-strong);}
+  .btn-ghost:hover{background:var(--surface-2);}
+  .btn-sm{padding:8px 12px; font-size:12.5px; border-radius:8px;}
+  .btn-block{width:100%;}
+  .btn svg{width:15px;height:15px;}
+
+  .result-box{
+    margin-top:16px; padding:14px; border-radius:10px;
+    background:var(--surface-2); border:1px solid var(--border-strong);
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    animation:rise .3s ease both; flex-wrap:wrap;
+  }
+  .result-stats{display:flex; flex-direction:column; gap:2px;}
+  .result-saved{font-weight:800; font-size:15px;}
+  .result-sub{font-size:11.5px; color:var(--text-faint); font-family:'IBM Plex Mono',monospace;}
+
+  /* ---------- Multi header ---------- */
+  .multi-header{
+    padding:22px; margin-bottom:18px;
+  }
+  .apply-all-row{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:14px; padding-top:14px; border-top:1px dashed var(--border);
+  }
+  .apply-all-label{display:flex; flex-direction:column; gap:2px;}
+  .apply-all-label b{font-size:13.5px;}
+  .apply-all-label span{font-size:11.5px; color:var(--text-faint);}
+
+  .switch{
+    position:relative; width:46px; height:26px; flex-shrink:0;
+  }
+  .switch input{opacity:0; width:0; height:0;}
+  .switch-track{
+    position:absolute; inset:0; background:var(--surface-3);
+    border:1px solid var(--border-strong); border-radius:999px; cursor:pointer;
+    transition:background .2s ease;
+  }
+  .switch-track::before{
+    content:''; position:absolute; width:18px; height:18px; left:3px; top:2px;
+    background:var(--text-faint); border-radius:50%;
+    transition:transform .2s ease, background .2s ease;
+  }
+  .switch input:checked + .switch-track{background:var(--white); border-color:var(--white);}
+  .switch input:checked + .switch-track::before{transform:translateX(20px); background:#000;}
+
+  /* ---------- Image grid ---------- */
+  .img-grid{
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr));
+    gap:14px; margin-bottom:20px;
+  }
+  .img-card{
+    padding:16px; display:flex; flex-direction:column; gap:12px;
+  }
+  .img-card-top{display:flex; gap:12px;}
+  .img-thumb{
+    width:56px; height:56px; border-radius:9px; object-fit:cover; flex-shrink:0;
+    border:1px solid var(--border-strong); background:var(--surface-2);
+  }
+  .img-card-info{min-width:0; flex:1;}
+  .img-card-name{font-weight:700; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .img-card-size{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-faint); margin-top:3px;}
+
+  .img-card-select{
+    width:100%; background:var(--surface-2); color:var(--text);
+    border:1px solid var(--border-strong); border-radius:8px;
+    padding:9px 10px; font-family:'IBM Plex Mono',monospace; font-size:12.5px;
+    cursor:pointer;
+  }
+
+  .info-panel{
+    background:var(--surface-2); border:1px solid var(--border);
+    border-radius:8px; padding:10px 12px; font-size:12px;
+    display:flex; flex-direction:column; gap:5px;
+    animation:rise .25s ease both;
+  }
+  .info-row{display:flex; justify-content:space-between; gap:8px;}
+  .info-row span:first-child{color:var(--text-faint);}
+  .info-row span:last-child{font-family:'IBM Plex Mono',monospace; text-align:right; word-break:break-all;}
+
+  .img-card-actions{display:flex; gap:8px;}
+  .img-card-actions .btn{flex:1;}
+
+  .sticky-actions{
+    position:sticky; bottom:16px;
+    display:flex; gap:10px; margin-top:6px;
+  }
+  .sticky-actions .btn{flex:1; box-shadow:0 10px 30px rgba(0,0,0,.55);}
+
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--white); color:#000; font-weight:700; font-size:13.5px;
+    padding:12px 20px; border-radius:999px; opacity:0; pointer-events:none;
+    transition:opacity .25s ease, transform .25s ease; z-index:100;
+    box-shadow:0 12px 30px rgba(0,0,0,.5);
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  .reset-row{display:flex; justify-content:flex-end; margin-bottom:14px;}
+
+  @media (max-width:520px){
+    .single-top{flex-direction:column; align-items:center; text-align:center;}
+    .meta-row{font-size:13px;}
+    .result-box{flex-direction:column; align-items:flex-start;}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="https://hazik.in" aria-label="Home — Hazik.in">
+      <span class="home-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg>
+      </span>
+      <span class="brand-name">Hazik.in</span>
+    </a>
+    <span class="topbar-tag"><span class="dot"></span><span id="topbarStatus">Ready</span></span>
+  </div>
+  <div class="shimmer" id="shimmer"><div class="shimmer-fill" id="shimmerFill"></div></div>
+</header>
+
+<main id="app"></main>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="fileInput" accept="image/*" multiple hidden>
+
+<script>
+(function(){
+  "use strict";
+
+  const MAX_FILES = 100;
+  const QUALITY_PRESETS = [
+    {id:'max',  label:'Maximum Compression', sub:'Smallest file · lower quality', value:0.20},
+    {id:'high', label:'High Compression',    sub:'Big savings',                   value:0.40},
+    {id:'bal',  label:'Balanced',            sub:'Recommended',                   value:0.60},
+    {id:'light',label:'Light Compression',   sub:'Great quality',                 value:0.80},
+    {id:'min',  label:'Minimal Compression', sub:'Best quality · larger file',    value:0.93},
+  ];
+  const DEFAULT_PRESET = 'bal';
+
+  const state = {
+    files: [],
+    applyToAll: true,
+    globalPreset: DEFAULT_PRESET,
+    openDrawer: false,
+    compressing: false,
+  };
+
+  const app = document.getElementById('app');
+  const fileInput = document.getElementById('fileInput');
+  const toastEl = document.getElementById('toast');
+  const shimmerFill = document.getElementById('shimmerFill');
+  const topbarStatus = document.getElementById('topbarStatus');
+
+  // ---------- helpers ----------
+  function uid(){ return 'f' + Math.random().toString(36).slice(2) + Date.now().toString(36); }
+
+  function fmtBytes(bytes){
+    if(bytes === 0) return '0 B';
+    const units = ['B','KB','MB','GB'];
+    const i = Math.min(units.length-1, Math.floor(Math.log(bytes)/Math.log(1024)));
+    const val = bytes / Math.pow(1024,i);
+    return (i===0 ? val : val.toFixed(val<10?2:1)) + ' ' + units[i];
+  }
+
+  function extFromType(type){
+    if(type.includes('png')) return 'PNG';
+    if(type.includes('jpeg') || type.includes('jpg')) return 'JPEG';
+    if(type.includes('webp')) return 'WEBP';
+    if(type.includes('gif')) return 'GIF';
+    if(type.includes('svg')) return 'SVG';
+    return (type.split('/')[1] || 'IMAGE').toUpperCase();
+  }
+
+  function presetById(id){ return QUALITY_PRESETS.find(p=>p.id===id) || QUALITY_PRESETS[2]; }
+
+  function baseName(name){ return name.replace(/\.[^/.]+$/, ''); }
+
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=> toastEl.classList.remove('show'), 2600);
+  }
+
+  function setProgress(pct){
+    shimmerFill.style.width = pct + '%';
+  }
+
+  function setStatus(text){ topbarStatus.textContent = text; }
+
+  // ---------- file handling ----------
+  function addFiles(fileList){
+    const incoming = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+    if(incoming.length === 0){
+      showToast('Please choose image files only');
+      return;
+    }
+    const room = MAX_FILES - state.files.length;
+    if(room <= 0){
+      showToast('Limit reached — 100 images max');
+      return;
+    }
+    const toAdd = incoming.slice(0, room);
+    if(incoming.length > room){
+      showToast(`Only added ${toAdd.length} — 100 image limit reached`);
+    }
+    toAdd.forEach(file=>{
+      state.files.push({
+        id: uid(),
+        file,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        thumb: URL.createObjectURL(file),
+        presetId: state.globalPreset,
+        dims: null,
+        showInfo: false,
+        compressed: null,   // {blob,url,size}
+        compressing: false,
+      });
+    });
+    render();
+  }
+
+  function removeAll(){
+    state.files.forEach(f=>{
+      URL.revokeObjectURL(f.thumb);
+      if(f.compressed) URL.revokeObjectURL(f.compressed.url);
+    });
+    state.files = [];
+    setProgress(0);
+    setStatus('Ready');
+    render();
+  }
+
+  function loadDims(fileObj){
+    return new Promise(resolve=>{
+      if(fileObj.dims){ resolve(fileObj.dims); return; }
+      const img = new Image();
+      img.onload = ()=>{
+        fileObj.dims = {w: img.naturalWidth, h: img.naturalHeight};
+        resolve(fileObj.dims);
+      };
+      img.onerror = ()=> resolve(null);
+      img.src = fileObj.thumb;
+    });
+  }
+
+  function compressOne(fileObj){
+    return new Promise((resolve, reject)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        try{
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0,0,canvas.width,canvas.height);
+          ctx.drawImage(img,0,0);
+          const q = presetById(fileObj.presetId).value;
+          canvas.toBlob(blob=>{
+            if(!blob){ reject(new Error('Compression failed')); return; }
+            resolve(blob);
+          }, 'image/jpeg', q);
+        }catch(e){ reject(e); }
+      };
+      img.onerror = ()=> reject(new Error('Could not read image'));
+      img.src = fileObj.thumb;
+    });
+  }
+
+  async function compressFiles(list){
+    if(list.length === 0) return;
+    state.compressing = true;
+    setStatus('Compressing…');
+    setProgress(2);
+    let done = 0;
+    for(const fileObj of list){
+      fileObj.compressing = true;
+      try{
+        const blob = await compressOne(fileObj);
+        if(fileObj.compressed) URL.revokeObjectURL(fileObj.compressed.url);
+        fileObj.compressed = {
+          blob,
+          url: URL.createObjectURL(blob),
+          size: blob.size,
+        };
+      }catch(err){
+        showToast('Could not compress ' + fileObj.name);
+      }
+      fileObj.compressing = false;
+      done++;
+      setProgress(Math.round((done/list.length)*100));
+      renderListOnly();
+    }
+    state.compressing = false;
+    setStatus('Ready');
+    setTimeout(()=> setProgress(0), 700);
+    showToast(list.length > 1 ? 'All images compressed' : 'Image compressed');
+    render();
+  }
+
+  async function downloadAllZip(){
+    if(typeof JSZip === 'undefined'){
+      showToast('Zip library failed to load — download images individually');
+      return;
+    }
+    const ready = state.files.filter(f=>f.compressed);
+    if(ready.length === 0){ showToast('Compress your images first'); return; }
+    setStatus('Zipping…');
+    const zip = new JSZip();
+    const usedNames = new Set();
+    ready.forEach(f=>{
+      let name = baseName(f.name) + '-compressed.jpg';
+      let n = 1;
+      while(usedNames.has(name)){
+        name = baseName(f.name) + '-compressed-' + (n++) + '.jpg';
+      }
+      usedNames.add(name);
+      zip.file(name, f.compressed.blob);
+    });
+    const content = await zip.generateAsync({type:'blob'});
+    const url = URL.createObjectURL(content);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'hazik-compressed-images.zip';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=> URL.revokeObjectURL(url), 4000);
+    setStatus('Ready');
+    showToast('Zip downloaded');
+  }
+
+  function downloadOne(fileObj){
+    if(!fileObj.compressed) return;
+    const a = document.createElement('a');
+    a.href = fileObj.compressed.url;
+    a.download = baseName(fileObj.name) + '-compressed.jpg';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  // ---------- render ----------
+  function svgChevron(){
+    return '<svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+  }
+  function svgDownload(){
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>';
+  }
+  function svgInfo(){
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7.5v.01"/></svg>';
+  }
+
+  function drawerHTML(currentPresetId, targetId){
+    const cur = presetById(currentPresetId);
+    return `
+      <div class="drawer-wrap" data-drawer="${targetId}">
+        <button type="button" class="drawer-btn ${state.openDrawer===targetId?'open':''}" data-action="toggle-drawer" data-target="${targetId}">
+          <span>${cur.label} · ${Math.round(cur.value*100)}%</span>
+          ${svgChevron()}
+        </button>
+        ${state.openDrawer===targetId ? `
+        <div class="drawer-panel">
+          ${QUALITY_PRESETS.map(p=>`
+            <div class="drawer-option ${p.id===currentPresetId?'active':''}" data-action="pick-preset" data-target="${targetId}" data-preset="${p.id}">
+              <div>
+                <div class="drawer-option-label">${p.label}</div>
+                <div class="drawer-option-sub">${p.sub}</div>
+              </div>
+              <div class="drawer-option-val">${Math.round(p.value*100)}%</div>
+            </div>
+          `).join('')}
+        </div>` : ''}
+      </div>
+    `;
+  }
+
+  function renderIntro(){
+    app.innerHTML = `
+      <div class="intro-card">
+        <h1 class="intro-title">Compress Your Image Fastly</h1>
+        <div class="intro-badges">
+          <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> No Sign Up Needed</span>
+          <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 11-13h-7z"/></svg> One-Step Compression</span>
+        </div>
+        <div class="credit">Made By Hazik</div>
+        <div class="dropzone" id="dropzone">
+          <div class="dropzone-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m6 10 6-6 6 6"/><path d="M4 20h16"/></svg>
+          </div>
+          <div class="dropzone-text">To Compress, Add Your Images to Input</div>
+          <div class="dropzone-sub">CLICK TO BROWSE OR DROP UP TO 100 IMAGES</div>
+        </div>
+      </div>
+    `;
+    bindDropzone(document.getElementById('dropzone'));
+  }
+
+  function renderSingle(){
+    const f = state.files[0];
+    const preset = presetById(f.presetId);
+    app.innerHTML = `
+      <div class="reset-row"><button class="btn btn-ghost btn-sm" data-action="reset">Start Over</button></div>
+      <div class="card single-card">
+        <div class="single-top">
+          <img class="thumb" src="${f.thumb}" alt="">
+          <div class="meta-list">
+            <div class="meta-row"><span class="meta-label">Image Name</span><span class="meta-value">${escapeHtml(f.name)}</span></div>
+            <div class="meta-row"><span class="meta-label">Image Size</span><span class="meta-value">${fmtBytes(f.size)}</span></div>
+            <div class="meta-row"><span class="meta-label">Image Quality</span><span class="meta-value">Original · ${extFromType(f.type)}</span></div>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <label class="field-label">Compress Quality</label>
+        ${drawerHTML(f.presetId, 'single')}
+        <div style="height:16px"></div>
+        <button class="btn btn-primary" data-action="compress-single" ${f.compressing?'disabled':''}>
+          ${f.compressing ? 'Compressing…' : 'Compress'}
+        </button>
+        ${f.compressed ? resultBoxHTML(f) : ''}
+      </div>
+      <div class="dropzone" id="dropzone" style="margin-top:16px; padding:22px;">
+        <div class="dropzone-text" style="font-size:13px;">Add more images</div>
+      </div>
+    `;
+    bindDropzone(document.getElementById('dropzone'));
+  }
+
+  function resultBoxHTML(f){
+    const savedPct = Math.max(0, Math.round((1 - f.compressed.size / f.size) * 100));
+    return `
+      <div class="result-box">
+        <div class="result-stats">
+          <div class="result-saved">−${savedPct}% smaller · ${fmtBytes(f.compressed.size)}</div>
+          <div class="result-sub">WAS ${fmtBytes(f.size)} → NOW ${fmtBytes(f.compressed.size)}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" data-action="download-one" data-id="${f.id}">${svgDownload()} Download</button>
+      </div>
+    `;
+  }
+
+  function renderMulti(){
+    const total = state.files.length;
+    const compressedCount = state.files.filter(f=>f.compressed).length;
+    app.innerHTML = `
+      <div class="reset-row"><button class="btn btn-ghost btn-sm" data-action="reset">Start Over</button></div>
+      <div class="card multi-header">
+        <div class="section-heading">
+          <h2>Total Images</h2>
+          <span class="count-pill">${total} / ${MAX_FILES}</span>
+        </div>
+        <label class="field-label">Compress Quality</label>
+        ${drawerHTML(state.globalPreset, 'global')}
+        <div class="apply-all-row">
+          <div class="apply-all-label">
+            <b>Apply to all images</b>
+            <span>${state.applyToAll ? 'One quality setting for every image' : 'Set quality per image below'}</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="applyAllToggle" ${state.applyToAll ? 'checked' : ''}>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="img-grid">
+        ${state.files.map(f=>imgCardHTML(f)).join('')}
+      </div>
+
+      <div class="sticky-actions">
+        <button class="btn btn-primary" data-action="compress-all" ${state.compressing?'disabled':''}>
+          ${state.compressing ? 'Compressing…' : `Compress ${state.applyToAll ? 'All' : 'Images'}`}
+        </button>
+        ${compressedCount>0 ? `<button class="btn btn-ghost" data-action="download-all">${svgDownload()} Download All (.zip)</button>` : ''}
+      </div>
+
+      <div class="dropzone" id="dropzone" style="margin-top:16px; padding:22px;">
+        <div class="dropzone-text" style="font-size:13px;">Add more images (${MAX_FILES - total} remaining)</div>
+      </div>
+    `;
+    bindDropzone(document.getElementById('dropzone'));
+  }
+
+  function imgCardHTML(f){
+    const preset = presetById(f.presetId);
+    return `
+      <div class="card img-card" data-file="${f.id}">
+        <div class="img-card-top">
+          <img class="img-thumb" src="${f.thumb}" alt="">
+          <div class="img-card-info">
+            <div class="img-card-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+            <div class="img-card-size">${fmtBytes(f.size)} · ${extFromType(f.type)}</div>
+          </div>
+        </div>
+
+        ${!state.applyToAll ? `
+          <select class="img-card-select" data-action="pick-preset-select" data-id="${f.id}">
+            ${QUALITY_PRESETS.map(p=>`<option value="${p.id}" ${p.id===f.presetId?'selected':''}>${p.label} · ${Math.round(p.value*100)}%</option>`).join('')}
+          </select>
+        ` : `<div class="img-card-size">Quality: ${preset.label} · ${Math.round(preset.value*100)}%</div>`}
+
+        <div class="img-card-actions">
+          <button class="btn btn-ghost btn-sm" data-action="toggle-info" data-id="${f.id}">${svgInfo()} ${f.showInfo ? 'Hide Info' : 'Show All Info'}</button>
+        </div>
+
+        ${f.showInfo ? infoPanelHTML(f) : ''}
+
+        ${f.compressed ? `
+          <div class="result-box" style="padding:10px 12px;">
+            <div class="result-stats">
+              <div class="result-saved" style="font-size:13px;">−${Math.max(0,Math.round((1-f.compressed.size/f.size)*100))}% · ${fmtBytes(f.compressed.size)}</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" data-action="download-one" data-id="${f.id}">${svgDownload()}</button>
+          </div>
+        ` : (f.compressing ? `<div class="img-card-size">Compressing…</div>` : '')}
+      </div>
+    `;
+  }
+
+  function infoPanelHTML(f){
+    const dims = f.dims ? `${f.dims.w} × ${f.dims.h}px` : 'Loading…';
+    const modified = f.file.lastModified ? new Date(f.file.lastModified).toLocaleDateString() : '—';
+    return `
+      <div class="info-panel">
+        <div class="info-row"><span>Format</span><span>${extFromType(f.type)}</span></div>
+        <div class="info-row"><span>Dimensions</span><span>${dims}</span></div>
+        <div class="info-row"><span>Original Size</span><span>${fmtBytes(f.size)}</span></div>
+        <div class="info-row"><span>Last Modified</span><span>${modified}</span></div>
+      </div>
+    `;
+  }
+
+  function escapeHtml(str){
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function render(){
+    if(state.files.length === 0) renderIntro();
+    else if(state.files.length === 1) renderSingle();
+    else renderMulti();
+  }
+
+  function renderListOnly(){
+    // lightweight re-render used during batch compression to keep progress smooth
+    render();
+  }
+
+  // ---------- dropzone binding ----------
+  function bindDropzone(el){
+    if(!el) return;
+    el.addEventListener('click', ()=> fileInput.click());
+    el.addEventListener('dragover', e=>{ e.preventDefault(); el.classList.add('dragover'); });
+    el.addEventListener('dragleave', ()=> el.classList.remove('dragover'));
+    el.addEventListener('drop', e=>{
+      e.preventDefault();
+      el.classList.remove('dragover');
+      if(e.dataTransfer.files) addFiles(e.dataTransfer.files);
+    });
+  }
+
+  fileInput.addEventListener('change', e=>{
+    if(e.target.files) addFiles(e.target.files);
+    fileInput.value = '';
+  });
+
+  // global paste support
+  window.addEventListener('paste', e=>{
+    if(e.clipboardData && e.clipboardData.files && e.clipboardData.files.length){
+      addFiles(e.clipboardData.files);
+    }
+  });
+
+  // ---------- delegated events ----------
+  document.addEventListener('click', async (e)=>{
+    const btn = e.target.closest('[data-action]');
+    if(!btn) {
+      // click-outside closes drawer
+      if(state.openDrawer && !e.target.closest('.drawer-wrap')){
+        state.openDrawer = false;
+        render();
+      }
+      return;
+    }
+    const action = btn.dataset.action;
+
+    if(action === 'toggle-drawer'){
+      const target = btn.dataset.target;
+      state.openDrawer = state.openDrawer === target ? false : target;
+      render();
+      return;
+    }
+
+    if(action === 'pick-preset'){
+      const target = btn.dataset.target;
+      const presetId = btn.dataset.preset;
+      if(target === 'global'){
+        state.globalPreset = presetId;
+        if(state.applyToAll){
+          state.files.forEach(f=> f.presetId = presetId);
+        }
+      } else if(target === 'single'){
+        if(state.files[0]) state.files[0].presetId = presetId;
+      }
+      state.openDrawer = false;
+      render();
+      return;
+    }
+
+    if(action === 'reset'){
+      removeAll();
+      return;
+    }
+
+    if(action === 'compress-single'){
+      await compressFiles([state.files[0]]);
+      return;
+    }
+
+    if(action === 'compress-all'){
+      await compressFiles(state.files);
+      return;
+    }
+
+    if(action === 'download-one'){
+      const f = state.files.find(x=>x.id === btn.dataset.id);
+      if(f) downloadOne(f);
+      return;
+    }
+
+    if(action === 'download-all'){
+      downloadAllZip();
+      return;
+    }
+
+    if(action === 'toggle-info'){
+      const f = state.files.find(x=>x.id === btn.dataset.id);
+      if(f){
+        f.showInfo = !f.showInfo;
+        if(f.showInfo && !f.dims){
+          await loadDims(f);
+        }
+        render();
+      }
+      return;
+    }
+  });
+
+  document.addEventListener('change', (e)=>{
+    if(e.target.id === 'applyAllToggle'){
+      state.applyToAll = e.target.checked;
+      if(state.applyToAll){
+        state.files.forEach(f=> f.presetId = state.globalPreset);
+      }
+      render();
+      return;
+    }
+    if(e.target.dataset && e.target.dataset.action === 'pick-preset-select'){
+      const f = state.files.find(x=>x.id === e.target.dataset.id);
+      if(f) f.presetId = e.target.value;
+      return;
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
