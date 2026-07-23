@@ -1,2 +1,10 @@
-# hazik-mir.github.io
-Hazik — Developer &amp; Creator 🚀 I’m a passionate Python and HTML developer focused on building clean, functional, and creative projects. I enjoy turning ideas into real, working solutions and constantly learning new technologies. This is just the beginning — more skills, bigger projects, and exciting innovations coming soon.
+#hazik.in
+
+Just Play, Learn, Fastly
+
+Get Powerful Tools easily 
+
+
+Copyright ® 2026
+don't copy this code or distribute this code
+usage is free just try it don't edit it 
